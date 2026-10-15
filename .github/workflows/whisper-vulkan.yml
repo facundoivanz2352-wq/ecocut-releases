@@ -1,0 +1,59 @@
+# Compila whisper.cpp con Vulkan para Windows x64 y lo publica como versión de este repo. Es el motor de
+# transcripción de Ecocut para placas que no son NVIDIA (AMD, Intel): whisper.cpp no publica esta variante.
+# Se corre a mano (Actions → whisper-vulkan → Run workflow) con la versión de whisper.cpp a compilar.
+name: whisper-vulkan
+
+on:
+  workflow_dispatch:
+    inputs:
+      whisper:
+        description: Versión de whisper.cpp (tag de ggml-org/whisper.cpp)
+        required: true
+        default: v1.9.5
+
+permissions:
+  contents: write
+
+jobs:
+  windows-vulkan:
+    runs-on: windows-2025
+    env:
+      VULKAN_VERSION: 1.4.357.0
+      NOMBRE: whisper-vulkan-win-x64-${{ inputs.whisper }}
+    steps:
+      - name: Bajar whisper.cpp
+        uses: actions/checkout@v4
+        with:
+          repository: ggml-org/whisper.cpp
+          ref: ${{ inputs.whisper }}
+
+      - name: Instalar el Vulkan SDK
+        run: |
+          curl.exe -o $env:RUNNER_TEMP/VulkanSDK-Installer.exe -L "https://sdk.lunarg.com/sdk/download/${env:VULKAN_VERSION}/windows/vulkansdk-windows-X64-${env:VULKAN_VERSION}.exe"
+          & "$env:RUNNER_TEMP\VulkanSDK-Installer.exe" --accept-licenses --default-answer --confirm-command install
+          Add-Content $env:GITHUB_ENV "VULKAN_SDK=C:\VulkanSDK\${env:VULKAN_VERSION}"
+          Add-Content $env:GITHUB_PATH "C:\VulkanSDK\${env:VULKAN_VERSION}\bin"
+
+      # Vulkan para la placa; el procesador, en variantes que se eligen solas al arrancar (no depende del de esta máquina).
+      - name: Compilar
+        run: |
+          cmake -S . -B build -DGGML_VULKAN=ON -DGGML_NATIVE=OFF -DGGML_BACKEND_DL=ON -DGGML_CPU_ALL_VARIANTS=ON -DWHISPER_BUILD_TESTS=OFF -DWHISPER_SDL2=OFF
+          cmake --build build --config Release -j 4
+
+      - name: Empaquetar
+        run: |
+          New-Item -ItemType Directory $env:NOMBRE | Out-Null
+          Copy-Item build\bin\Release\*.exe, build\bin\Release\*.dll $env:NOMBRE
+          Copy-Item LICENSE "$env:NOMBRE\LICENSE-whisper.cpp.txt"
+          7z a "$env:NOMBRE.zip" ".\$env:NOMBRE\*"
+          $h = (Get-FileHash "$env:NOMBRE.zip" -Algorithm SHA256).Hash.ToLower()
+          Set-Content "$env:NOMBRE.zip.sha256" "$h  $env:NOMBRE.zip" -NoNewline
+          Get-ChildItem $env:NOMBRE | Select-Object Name, Length | Format-Table
+
+      - name: Publicar
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "whisper-vulkan-${{ inputs.whisper }}"
+          gh release delete $tag --repo ${{ github.repository }} --yes --cleanup-tag 2>$null
+          gh release create $tag "$env:NOMBRE.zip" "$env:NOMBRE.zip.sha256" --repo ${{ github.repository }} --title "whisper.cpp ${{ inputs.whisper }} con Vulkan (Windows x64)" --notes "Compilado desde ggml-org/whisper.cpp ${{ inputs.whisper }} con -DGGML_VULKAN=ON. Licencia MIT (LICENSE-whisper.cpp.txt). Lo usa Ecocut para transcribir en placas que no son NVIDIA."
