@@ -56,4 +56,4 @@ jobs:
         run: |
           $tag = "whisper-vulkan-${{ inputs.whisper }}"
           gh release delete $tag --repo ${{ github.repository }} --yes --cleanup-tag 2>$null
-          gh release create $tag "$env:NOMBRE.zip" "$env:NOMBRE.zip.sha256" --repo ${{ github.repository }} --title "whisper.cpp ${{ inputs.whisper }} con Vulkan (Windows x64)" --notes "Compilado desde ggml-org/whisper.cpp ${{ inputs.whisper }} con -DGGML_VULKAN=ON. Licencia MIT (LICENSE-whisper.cpp.txt). Lo usa Ecocut para transcribir en placas que no son NVIDIA."
+          gh release create $tag "$env:NOMBRE.zip" "$env:NOMBRE.zip.sha256" --repo ${{ github.repository }} --latest=false --title "whisper.cpp ${{ inputs.whisper }} con Vulkan (Windows x64)" --notes "Compilado desde ggml-org/whisper.cpp ${{ inputs.whisper }} con -DGGML_VULKAN=ON. Licencia MIT (LICENSE-whisper.cpp.txt). Lo usa Ecocut para transcribir en placas que no son NVIDIA."
